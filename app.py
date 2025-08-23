@@ -10,6 +10,9 @@ app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20 MB limit
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_pdfs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+def normalize_text(text):
+    return re.sub(r"\s+", "", text).lower()
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -93,9 +96,16 @@ def index():
                     matched_pages.append((term, page_num))
                     print(f"Term '{term}' found {len(matches_found)} times on page {page_num}")
 
-                    # Highlight sirf matched text ke exact coordinates pe karna
-                    highlight_rects = page.search_for(term, hit_max=64)  
-                    for rect in highlight_rects:
+                    # Highlight original term
+                    highlight_rects = page.search_for(term, hit_max=64)
+                    # Highlight normalized term (spaces removed)
+                    normalized_term = normalize_text(term)
+                    highlight_rects += page.search_for(normalized_term, hit_max=64)
+
+                    # Remove duplicates by converting to set (because page.search_for returns Rect objects, convert to tuples)
+                    unique_rects = { (r.x0, r.y0, r.x1, r.y1) : r for r in highlight_rects }
+                    
+                    for rect in unique_rects.values():
                         highlight = page.add_highlight_annot(rect)
                         highlight.set_colors(stroke=highlight_color)
                         highlight.update()
