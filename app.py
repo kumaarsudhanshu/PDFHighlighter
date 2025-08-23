@@ -13,16 +13,16 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def normalize_text(text):
     return re.sub(r"\s+", "", text).lower()
 
-def map_normalized_to_original(page_text):
-    mapping = []
-    normalized_chars = []
-    for i, c in enumerate(page_text):
-        if c.isspace():
-            continue
-        normalized_chars.append(c.lower())
-        mapping.append(i)
-    normalized_text = ''.join(normalized_chars)
-    return normalized_text, mapping
+# Predefined color palette, you can extend or modify it
+DEFAULT_COLORS = [
+    (1, 1, 0),      # Yellow
+    (0, 1, 0),      # Green
+    (0, 1, 1),      # Cyan
+    (1, 0, 0),      # Red
+    (1, 0, 1),      # Magenta
+    (0, 0, 1),      # Blue
+    (1, 0.5, 0),    # Orange
+]
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -34,21 +34,23 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ PDF file and search terms are required",
                                    message_type="error")
 
-        # Get unique stripped terms
         terms = list(set(filter(None, [t.strip() for t in terms_raw.split(',')])))
         if not terms:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ Please enter at least one valid number or text",
                                    message_type="error")
+
+        # Assign each term a color in round-robin fashion
+        term_colors = {}
+        for idx, term in enumerate(terms):
+            term_colors[term] = DEFAULT_COLORS[idx % len(DEFAULT_COLORS)]
 
         input_filename = f"{uuid.uuid4()}.pdf"
         input_path = os.path.join(UPLOAD_FOLDER, input_filename)
@@ -57,72 +59,71 @@ def index():
 
         try:
             doc = fitz.open(input_path)
-            print(f"PDF loaded successfully: {input_filename}, pages: {doc.page_count}")
         except Exception as e:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=[],
                                    view_url=None,
                                    message=f"❌ Failed to open PDF: {e}",
                                    message_type="error")
 
-        highlight_color = (1, 1, 0)  # Yellow
-        matched_terms = set()
-        matches_with_pages = []
-        not_found_terms = set(terms)
-        no_text_flag = True
+        matched_pages = []
         match_count = 0
+        no_text_flag = True
 
         for page_num, page in enumerate(doc, start=1):
-            page_text = page.get_text()
+            try:
+                blocks = page.get_text("dict")["blocks"]
+            except Exception as e:
+                continue
+
+            page_text = ""
+            for block in blocks:
+                if "lines" in block and block["lines"]:
+                    for line in block["lines"]:
+                        for span in line["spans"]:
+                            page_text += span["text"] + "\n"
+
             if not page_text.strip():
                 continue
 
             no_text_flag = False
-            normalized_page_text, mapping = map_normalized_to_original(page_text)
 
             for term in terms:
-                if term in matched_terms:
-                    continue
+                escaped_term = re.escape(term)
+                if term.isdigit():
+                    pattern = re.compile(rf"(?<!\d){escaped_term}(?!\d|\.?\d)")
+                elif re.search(r'[^\w\s]', term):
+                    pattern = re.compile(escaped_term, re.IGNORECASE)
+                else:
+                    pattern = re.compile(rf"\b{escaped_term}\b", re.IGNORECASE)
 
-                normalized_term = normalize_text(term)
-                start_idx = 0
-                found_in_page = False
+                matches_found = list(pattern.finditer(page_text))
+                if matches_found:
+                    match_count += len(matches_found)
+                    matched_pages.append((term, page_num))
 
-                while True:
-                    idx = normalized_page_text.find(normalized_term, start_idx)
-                    if idx == -1:
-                        break
+                    # Highlight all occurrences with the assigned color
+                    highlight_rects = page.search_for(term)
+                    normalized_term = normalize_text(term)
+                    if normalized_term != term:
+                        highlight_rects += page.search_for(normalized_term)
 
-                    orig_start = mapping[idx]
-                    orig_end = mapping[idx + len(normalized_term) - 1] + 1
-                    matched_str = page_text[orig_start:orig_end]
+                    unique_rects = {(r.x0, r.y0, r.x1, r.y1): r for r in highlight_rects}
+                    color = term_colors.get(term, (1, 1, 0))  # fallback yellow
 
-                    rects = page.search_for(matched_str)
-                    for rect in rects:
+                    for rect in unique_rects.values():
                         highlight = page.add_highlight_annot(rect)
-                        highlight.set_colors(stroke=highlight_color)
+                        highlight.set_colors(stroke=color)
                         highlight.update()
-
-                    start_idx = idx + 1
-                    found_in_page = True
-                    match_count += 1
-
-                if found_in_page:
-                    matched_terms.add(term)
-                    not_found_terms.discard(term)
-                    matches_with_pages.append((term, page_num))
 
         try:
             doc.save(output_path)
             doc.close()
-            print(f"PDF saved with highlights: {output_path}")
         except Exception as e:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=[],
                                    view_url=None,
                                    message=f"❌ Error saving PDF: {e}",
                                    message_type="error")
@@ -133,40 +134,41 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ PDF me text available nahi hai. Agar scanned PDF hai to OCR enable karna padega.",
                                    message_type="error")
 
-        if not matches_with_pages:
+        if not matched_pages:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
-                                   not_found=list(not_found_terms),
                                    view_url=None,
                                    message="⚠️ No exact matches found.",
                                    message_type="error")
 
-        msg_text = f"✅ {match_count} total matches found!"
+        msg_text = f"✅ {match_count} exact matches found!"
         msg_type = "success"
 
         return render_template("view_pdf.html",
                                filename=os.path.basename(output_path),
-                               matches=matches_with_pages,
-                               not_found=sorted(not_found_terms),
+                               matches=matched_pages,
+                               term_colors=term_colors,
                                view_url=view_url,
                                message=msg_text,
                                message_type=msg_type)
 
     return render_template("index.html", message=None, message_type=None)
 
+
 @app.route('/files/<filename>')
 def view_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
+
 @app.route('/download/<filename>')
 def download_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5050))
