@@ -13,6 +13,17 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def normalize_text(text):
     return re.sub(r"\s+", "", text).lower()
 
+def map_normalized_to_original(page_text):
+    mapping = []
+    normalized_chars = []
+    for i, c in enumerate(page_text):
+        if c.isspace():
+            continue
+        normalized_chars.append(c.lower())
+        mapping.append(i)
+    normalized_text = ''.join(normalized_chars)
+    return normalized_text, mapping
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -23,15 +34,18 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ PDF file and search terms are required",
                                    message_type="error")
 
+        # Get unique stripped terms
         terms = list(set(filter(None, [t.strip() for t in terms_raw.split(',')])))
         if not terms:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ Please enter at least one valid number or text",
                                    message_type="error")
@@ -48,63 +62,57 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=[],
                                    view_url=None,
                                    message=f"❌ Failed to open PDF: {e}",
                                    message_type="error")
 
         highlight_color = (1, 1, 0)  # Yellow
-        matched_pages = []
-        match_count = 0
+        matched_terms = set()
+        matches_with_pages = []
+        not_found_terms = set(terms)
         no_text_flag = True
+        match_count = 0
 
         for page_num, page in enumerate(doc, start=1):
-            print(f"\n--- Processing page {page_num} ---")
-            try:
-                blocks = page.get_text("dict")["blocks"]
-            except Exception as e:
-                print(f"⚠️ Error reading page {page_num}: {e}")
-                continue
-
-            page_text = ""
-            for block in blocks:
-                if "lines" in block and block["lines"]:
-                    for line in block["lines"]:
-                        for span in line["spans"]:
-                            page_text += span["text"] + "\n"
-
-            print(f"Page {page_num} extracted text length: {len(page_text)}")
-
+            page_text = page.get_text()
             if not page_text.strip():
-                print(f"Page {page_num} has no text, skipping page.")
                 continue
 
             no_text_flag = False
+            normalized_page_text, mapping = map_normalized_to_original(page_text)
 
             for term in terms:
-                escaped_term = re.escape(term)
-                if term.isdigit():
-                    pattern = re.compile(rf"(?<!\d){escaped_term}(?!\d|\.?\d)")
-                elif re.search(r'[^\w\s]', term):
-                    pattern = re.compile(escaped_term, re.IGNORECASE)
-                else:
-                    pattern = re.compile(rf"\b{escaped_term}\b", re.IGNORECASE)
+                if term in matched_terms:
+                    continue
 
-                matches_found = list(pattern.finditer(page_text))
-                if matches_found:
-                    match_count += len(matches_found)
-                    matched_pages.append((term, page_num))
-                    print(f"Term '{term}' found {len(matches_found)} times on page {page_num}")
+                normalized_term = normalize_text(term)
+                start_idx = 0
+                found_in_page = False
 
-                    highlight_rects = page.search_for(term)
-                    normalized_term = normalize_text(term)
-                    highlight_rects += page.search_for(normalized_term)
+                while True:
+                    idx = normalized_page_text.find(normalized_term, start_idx)
+                    if idx == -1:
+                        break
 
-                    unique_rects = { (r.x0, r.y0, r.x1, r.y1) : r for r in highlight_rects }
-                    
-                    for rect in unique_rects.values():
+                    orig_start = mapping[idx]
+                    orig_end = mapping[idx + len(normalized_term) - 1] + 1
+                    matched_str = page_text[orig_start:orig_end]
+
+                    rects = page.search_for(matched_str)
+                    for rect in rects:
                         highlight = page.add_highlight_annot(rect)
                         highlight.set_colors(stroke=highlight_color)
                         highlight.update()
+
+                    start_idx = idx + 1
+                    found_in_page = True
+                    match_count += 1
+
+                if found_in_page:
+                    matched_terms.add(term)
+                    not_found_terms.discard(term)
+                    matches_with_pages.append((term, page_num))
 
         try:
             doc.save(output_path)
@@ -114,6 +122,7 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=[],
                                    view_url=None,
                                    message=f"❌ Error saving PDF: {e}",
                                    message_type="error")
@@ -124,24 +133,27 @@ def index():
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=[],
                                    view_url=None,
                                    message="⚠️ PDF me text available nahi hai. Agar scanned PDF hai to OCR enable karna padega.",
                                    message_type="error")
 
-        if not matched_pages:
+        if not matches_with_pages:
             return render_template("view_pdf.html",
                                    filename=None,
                                    matches=[],
+                                   not_found=list(not_found_terms),
                                    view_url=None,
                                    message="⚠️ No exact matches found.",
                                    message_type="error")
 
-        msg_text = f"✅ {match_count} exact matches found!"
+        msg_text = f"✅ {match_count} total matches found!"
         msg_type = "success"
 
         return render_template("view_pdf.html",
                                filename=os.path.basename(output_path),
-                               matches=matched_pages,
+                               matches=matches_with_pages,
+                               not_found=sorted(not_found_terms),
                                view_url=view_url,
                                message=msg_text,
                                message_type=msg_type)
