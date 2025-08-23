@@ -52,7 +52,7 @@ def index():
         highlight_color = (1, 1, 0)  # Yellow
         matched_pages = []
         match_count = 0
-        no_text_flag = True  # Initialize assuming no text found initially
+        no_text_flag = True
 
         for page_num, page in enumerate(doc, start=1):
             print(f"\n--- Processing page {page_num} ---")
@@ -75,10 +75,11 @@ def index():
                 print(f"Page {page_num} has no text, skipping page.")
                 continue
 
-            no_text_flag = False  # Text found in at least one page
+            no_text_flag = False
 
             for term in terms:
                 escaped_term = re.escape(term)
+                # Regex se text matching karenge
                 if term.isdigit():
                     pattern = re.compile(rf"(?<!\d){escaped_term}(?!\d|\.?\d)")
                 elif re.search(r'[^\w\s]', term):
@@ -92,19 +93,12 @@ def index():
                     matched_pages.append((term, page_num))
                     print(f"Term '{term}' found {len(matches_found)} times on page {page_num}")
 
-                    for block in blocks:
-                        if "lines" in block:
-                            for line in block["lines"]:
-                                for span in line["spans"]:
-                                    text = span["text"]
-                                    for match in pattern.finditer(text):
-                                        matched_text = match.group()
-                                        if term.isdigit() and matched_text != term:
-                                            continue
-                                        rect = fitz.Rect(span["bbox"])
-                                        highlight = page.add_highlight_annot(rect)
-                                        highlight.set_colors(stroke=highlight_color)
-                                        highlight.update()
+                    # Highlight sirf matched text ke exact coordinates pe karna
+                    highlight_rects = page.search_for(term, hit_max=64)  
+                    for rect in highlight_rects:
+                        highlight = page.add_highlight_annot(rect)
+                        highlight.set_colors(stroke=highlight_color)
+                        highlight.update()
 
         try:
             doc.save(output_path)
