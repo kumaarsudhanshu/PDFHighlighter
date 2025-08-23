@@ -97,7 +97,8 @@ def index():
 
                     highlight_rects = page.search_for(term)
                     normalized_term = normalize_text(term)
-                    highlight_rects += page.search_for(normalized_term)
+                    if normalized_term != term:
+                        highlight_rects += page.search_for(normalized_term)
 
                     unique_rects = { (r.x0, r.y0, r.x1, r.y1) : r for r in highlight_rects }
                     
