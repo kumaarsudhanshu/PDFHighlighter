@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PDF Number Highlighter</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+    :root {
+      --color-bg-light-start: #c7eaff;
+      --color-bg-light-end: #f6fbff;
+      --color-bg-dark-start: #0a1a2b;
+      --color-bg-dark-end: #1a2a4a;
+
+      --color-text-light: #212121;
+      --color-text-dark: #ddd;
+
+      --cloud-light: rgba(255,255,255,0.78);
+      --cloud-dark: rgba(255,255,255,0.26);
+
+      --container-bg-light: rgba(255,255,255,0.85);
+      --container-bg-dark: rgba(25,31,44,0.85);
+
+      --border-light: #9ecbfa;
+      --border-dark: #3a4e77;
+
+      --button-gradient-light: linear-gradient(90deg, #1565c0 65%, #64b4fa 100%);
+      --button-gradient-dark: linear-gradient(90deg, #304875 60%, #2e4a88 100%);
+    }
+
+    body {
+      font-family: 'Poppins', Arial, sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, var(--color-bg-light-start), var(--color-bg-light-end));
+      color: var(--color-text-light);
+      position: relative;
+      overflow: hidden;
+      transition: background 0.5s ease, color 0.5s ease;
+    }
+    body.dark-mode {
+      background: linear-gradient(180deg, var(--color-bg-dark-start), var(--color-bg-dark-end));
+      color: var(--color-text-dark);
+    }
+
+    /* Clouds */
+    .cloud {
+      position: absolute;
+      background: var(--cloud-light);
+      border-radius: 50%;
+      filter: blur(12px);
+      opacity: 0.62;
+      z-index: 0;
+      pointer-events: none;
+      animation: cloud-float 23s linear infinite;
+      transition: background 0.5s ease, opacity 0.5s ease;
+    }
+
+    body.dark-mode .cloud {
+      background: var(--cloud-dark);
+      opacity: 0.38;
+    }
+
+    .cloud1 { width: 220px; height: 70px; top: 22%; left: 10%; }
+    .cloud2 { width: 150px; height: 50px; top: 36%; left: 80%; }
+    .cloud3 { width: 320px; height: 80px; top: 68%; left: 23%; }
+    .cloud4 { width: 110px; height: 42px; top: 60%; left: 64%; }
+
+    @keyframes cloud-float {
+      0% { transform: translateY(0) scaleX(1.1); }
+      50% { transform: translateY(-12px) scaleX(1.09); }
+      100% { transform: translateY(0) scaleX(1.1); }
+    }
+
+    .container {
+      background: var(--container-bg-light);
+      padding: 30px 32px;
+      border-radius: 18px;
+      box-shadow: 0 8px 32px rgba(97,162,222,0.18);
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      backdrop-filter: blur(0.5px);
+      transition: background 0.5s ease, box-shadow 0.5s ease;
+    }
+    body.dark-mode .container {
+      background: var(--container-bg-dark);
+      box-shadow: 0 8px 32px rgba(15,33,62,0.7);
+    }
+
+    h2 {
+      color: #1966c1;
+      margin-bottom: 22px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      transition: color 0.5s ease;
+    }
+    body.dark-mode h2 {
+      color: #7aa6db;
+    }
+
+    label {
+      margin: 12px 0 7px;
+      font-weight: 500;
+      display: block;
+      text-align: left;
+      user-select: none;
+      transition: color 0.5s ease;
+    }
+    body.dark-mode label {
+      color: #c3cfe0;
+    }
+
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      margin: 8px 0;
+      padding: 12px 11px;
+      border: 2px solid var(--border-light);
+      border-radius: 9px;
+      outline: none;
+      transition: 0.3s, border-color 0.5s ease, background-color 0.5s ease, color 0.5s ease;
+      background-color: #f8fcff;
+      font-size: 15px;
+      color: var(--color-text-light);
+    }
+    body.dark-mode input[type="file"], body.dark-mode input[type="text"] {
+      background-color: #1b2438;
+      color: var(--color-text-dark);
+      border-color: var(--border-dark);
+    }
+    input[type="file"]:hover, input[type="text"]:focus {
+      border-color: var(--color-bg-dark-start);
+      background-color: #eef6fb;
+      color: var(--color-text-light);
+    }
+    body.dark-mode input[type="file"]:hover,
+    body.dark-mode input[type="text"]:focus {
+      border-color: #467ad1;
+      background-color: #243353;
+      color: var(--color-text-dark);
+    }
+
+    button {
+      margin-top: 12px;
+      width: 100%;
+      background: var(--button-gradient-light);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 17px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(39,84,167,0.09);
+      transition: background 0.3s, transform 0.2s;
+      user-select: none;
+    }
+    body.dark-mode button {
+      background: var(--button-gradient-dark);
+      box-shadow: 0 4px 12px rgba(16,37,71,0.7);
+    }
+    button:hover {
+      background: linear-gradient(90deg, #0d47a1 60%, #51a7ef 100%);
+      transform: scale(1.05);
+    }
+
+    .message {
+      margin-top: 18px;
+      font-weight: bold;
+      font-size: 1.1em;
+      text-align: center;
+      user-select: text;
+      transition: color 0.5s ease;
+    }
+    .error {
+      color: #d32f2f;
+    }
+    .success {
+      color: #388e3c;
+    }
+
+    /* Dark mode toggle */
+    .toggle-switch {
+      position: fixed;
+      top: 25px;
+      right: 25px;
+      z-index: 1000;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toggle-switch input {
+      display: none;
+    }
+    .toggle-switch label {
+      cursor: pointer;
+      text-indent: -9999px;
+      width: 60px;
+      height: 30px;
+      background: #bbb;
+      border-radius: 30px;
+      position: relative;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+      transition: background 0.3s ease;
+    }
+    .toggle-switch label:after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 22px;
+      transition: 0.3s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .toggle-switch input:checked + label {
+      background: var(--color-primary);
+    }
+    .toggle-switch input:checked + label:after {
+      left: calc(100% - 26px);
+    }
+
+    /* Sun and Moon Icon */
+    .dark-icon {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      transition: transform 0.4s ease;
+      user-select: none;
+    }
+
+    /* Sun */
+    .sun {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 18px;
+      height: 18px;
+      margin: -9px 0 0 -9px;
+      background: #ffd93b;
+      border-radius: 50%;
+      box-shadow:
+        0 -9px 0 #ffd93b,
+        0 9px 0 #ffd93b,
+        9px 0 0 #ffd93b,
+        -9px 0 0 #ffd93b,
+        6.36px 6.36px 0 #ffd93b,
+        -6.36px 6.36px 0 #ffd93b,
+        6.36px -6.36px 0 #ffd93b,
+        -6.36px -6.36px 0 #ffd93b;
+      transition: opacity 0.4s ease;
+      transform-origin: center;
+      z-index: 2;
+    }
+
+    /* Moon */
+    .moon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 18px;
+      height: 18px;
+      margin: -9px 0 0 -9px;
+      background: #f0f0f3;
+      border-radius: 50%;
+      box-shadow: -6px 0 0 0 var(--color-bg-dark-end);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      transform-origin: center;
+      z-index: 1;
+    }
+
+    body.dark-mode .sun {
+      opacity: 0;
+      transform: rotate(40deg) scale(0.8);
+      z-index: 1;
+    }
+    body.dark-mode .moon {
+      opacity: 1;
+      transform: rotate(40deg) scale(1);
+      z-index: 2;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="toggle-switch" title="Toggle Dark Mode">
+    <input type="checkbox" id="darkModeToggle" />
+    <label for="darkModeToggle"></label>
+    <div class="dark-icon" aria-hidden="true">
+      <div class="sun"></div>
+      <div class="moon"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2>📂 PDF Number Highlighter</h2>
+    <form method="POST" enctype="multipart/form-data">
+      <label for="pdfFile">Select PDF:</label>
+      <input id="pdfFile" type="file" name="pdf" accept="application/pdf" required />
+
+      <label for="numbersInput">Enter Numbers (comma separated):</label>
+      <input id="numbersInput" type="text" name="numbers" placeholder="e.g. 123, 456, 789" required />
+
+      <button type="submit">Upload & Highlight</button>
+    </form>
+
+    {% if message %}
+      <div class="message {{ message_type }}">{{ message }}</div>
+    {% endif %}
+  </div>
+
+  <script>
+    const toggleInput = document.getElementById('darkModeToggle');
+    const toggleSwitch = toggleInput.parentElement;
+
+    toggleInput.addEventListener('change', () => {
+      document.body.classList.toggle('dark-mode', toggleInput.checked);
+    });
+
+    window.onload = () => {
+      const saved = localStorage.getItem('darkMode');
+      if (saved === 'true') {
+        toggleInput.checked = true;
+        document.body.classList.add('dark-mode');
+      }
+    };
+
+    toggleInput.addEventListener('change', () => {
+      localStorage.setItem('darkMode', toggleInput.checked);
+    });
+  </script>
+</body>
+</html>

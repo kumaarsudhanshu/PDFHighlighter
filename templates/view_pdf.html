@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Highlighter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background: linear-gradient(120deg, #e4ecfa 0%, #f8fafc 100%);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: row;
+            gap: 32px;
+        }
+        .pdf-container {
+            flex: 3;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 4px 18px rgba(60,80,170,0.07);
+            padding: 0;
+            margin: 20px 0 20px 20px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 90vh;
+        }
+        .pdf-container iframe {
+            border: none;
+            border-radius: 8px;
+            width: 100%;
+            height: 90vh;
+            background: #fafbff;
+        }
+        .sidebar {
+            flex: 1;
+            background: #fff;
+            margin: 20px 20px 20px 0;
+            border-radius: 20px;
+            box-shadow: 0 4px 16px rgba(60,80,170,0.06);
+            padding: 28px 24px;
+            overflow-y: auto;
+            min-width: 320px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .matches-block {
+            background: #f9fbff;
+            border-radius: 16px;
+            box-shadow: 0 0 16px rgba(60,80,170,0.05);
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+            color: #4757a4;
+            font-weight: 600;
+        }
+        .success {
+            color: #21a065;
+            font-weight: 600;
+            background: #ebfaee;
+            border-radius: 6px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(33,160,101,0.13);
+        }
+        .error {
+            color: #d14545;
+            font-weight: 600;
+            background: #fde8ea;
+            border-radius: 6px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(209,69,69,0.10);
+        }
+        ul.matches-list {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .match-item {
+            margin-bottom: 10px;
+            padding: 10px 10px 8px 10px;
+            border-radius: 8px;
+            background: linear-gradient(100deg, #f7f9fe 70%, #f2f5fa 100%);
+            box-shadow: 0 1px 8px rgba(120,130,180,0.06);
+            display: flex;
+            align-items: center;
+            transition: box-shadow 0.28s, background 0.28s;
+            border-bottom: none;
+        }
+        .match-item:hover {
+            background: #dae7fc;
+            box-shadow: 0 2px 12px rgba(85,110,195,.14);
+        }
+        .match-item b {
+            background: #f6e054;
+            color: #6b623a;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-weight: 600;
+            font-family: 'Inter', Arial, sans-serif;
+            margin-right: 9px;
+        }
+        .match-item::before {
+            content: "🔎";
+            font-size: 1.15em;
+            margin-right: 10px;
+        }
+        a {
+            color: #4254cb;
+            text-decoration: none;
+            font-weight: 600;
+            background: #e8eefd;
+            border-radius: 6px;
+            padding: 7px 15px;
+            font-size: 1em;
+            box-shadow: 0 1px 6px rgba(92,119,211,.09);
+            transition: background 0.18s, color 0.18s;
+            margin-right: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        a:hover {
+            background: #4254cb;
+            color: #fff;
+        }
+        .download-center {
+            text-align: center;
+            margin: 16px 0;
+        }
+        .share-links {
+            margin-top: auto;
+            display: flex;
+            gap: 10px; /* small gap between buttons */
+            justify-content: flex-start; /* align buttons to left */
+            align-items: center;
+        }
+        .share-links a {
+            margin: 0;  /* remove individual link margins */
+            padding: 4px; /* smaller padding for tighter icons */
+            background: transparent; /* keep background minimal */
+            box-shadow: none; /* remove box shadow for share buttons */
+            border-radius: 6px;
+            transition: background 0.18s, color 0.18s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .share-links a:hover {
+            background: #4254cb;
+            color: #fff;
+        }
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+                gap: 12px;
+                margin: 0 8px;
+            }
+            .pdf-container, .sidebar {
+                margin: 16px auto;
+                min-width: 90vw;
+            }
+            .sidebar {
+                min-width: unset;
+                padding: 16px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="pdf-container">
+    {% if view_url %}
+        <iframe name="pdf-frame" src="{{ view_url }}"></iframe>
+    {% else %}
+        <p style="font-size:1.15em; color:#999; text-align:center; margin-top:36vh;">No PDF to display</p>
+    {% endif %}
+</div>
+
+<div class="sidebar">
+    {% if message %}
+        <p class="{{ message_type }}">{{ message }}</p>
+    {% endif %}
+
+    {% if matches %}
+    <div class="matches-block">
+        <h3>📄 Matches Found</h3>
+        <ul class="matches-list">
+            {% for term, page in matches %}
+                <li class="match-item">
+                    <a href="{{ view_url }}#page={{ page }}" target="pdf-frame">
+                        <b>{{ term }}</b>
+                    </a> → Page {{ page }}
+                </li>
+            {% endfor %}
+        </ul>
+
+        {% if filename %}
+            <div class="download-center">
+                <a href="{{ url_for('download_file', filename=filename) }}">⬇️ Download Highlighted PDF</a>
+            </div>
+        {% endif %}
+
+        <div class="share-links">
+            <!-- Whatsapp Share -->
+            <a href="https://wa.me/?text={{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share on WhatsApp">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" width="24" height="24" style="display: block;">
+            </a>
+
+            <!-- Email Share -->
+            <a href="mailto:?subject=Highlighted PDF&body=Check out this highlighted PDF: {{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share via Email">
+                <img src="https://icons.iconarchive.com/icons/dtafalonso/win-10x/256/Email-icon.png" alt="Email" width="24" height="24" style="display: block;">
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
