@@ -56,6 +56,7 @@
             display: flex;
             flex-direction: column;
             flex-grow: 1;
+            margin-bottom: 20px;
         }
         .sidebar h3 {
             margin-top: 0;
@@ -87,6 +88,7 @@
             list-style: none;
             overflow-y: auto;
             flex-grow: 1;
+            max-height: 400px;
         }
         .match-item {
             margin-bottom: 10px;
@@ -143,15 +145,15 @@
         .share-links {
             margin-top: auto;
             display: flex;
-            gap: 10px; /* small gap between buttons */
-            justify-content: flex-start; /* align buttons to left */
+            gap: 10px;
+            justify-content: flex-start;
             align-items: center;
         }
         .share-links a {
-            margin: 0;  /* remove individual link margins */
-            padding: 4px; /* smaller padding for tighter icons */
-            background: transparent; /* keep background minimal */
-            box-shadow: none; /* remove box shadow for share buttons */
+            margin: 0;
+            padding: 4px;
+            background: transparent;
+            box-shadow: none;
             border-radius: 6px;
             transition: background 0.18s, color 0.18s;
             display: inline-flex;
@@ -195,37 +197,51 @@
     {% endif %}
 
     {% if matches %}
-    <div class="matches-block">
-        <h3>📄 Matches Found</h3>
-        <ul class="matches-list">
-            {% for term, page in matches %}
-                <li class="match-item">
-                    <a href="{{ view_url }}#page={{ page }}" target="pdf-frame">
-                        <b>{{ term }}</b>
-                    </a> → Page {{ page }}
-                </li>
-            {% endfor %}
-        </ul>
-
-        {% if filename %}
-            <div class="download-center">
-                <a href="{{ url_for('download_file', filename=filename) }}">⬇️ Download Highlighted PDF</a>
-            </div>
-        {% endif %}
-
-        <div class="share-links">
-            <!-- Whatsapp Share -->
-            <a href="https://wa.me/?text={{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share on WhatsApp">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" width="24" height="24" style="display: block;">
-            </a>
-
-            <!-- Email Share -->
-            <a href="mailto:?subject=Highlighted PDF&body=Check out this highlighted PDF: {{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share via Email">
-                <img src="https://icons.iconarchive.com/icons/dtafalonso/win-10x/256/Email-icon.png" alt="Email" width="24" height="24" style="display: block;">
-            </a>
+        <div class="matches-block">
+            <h3>📄 Matches Found</h3>
+            <ul class="matches-list">
+                {% for term, page in matches %}
+                    <li class="match-item">
+                        <a href="{{ view_url }}#page={{ page }}" target="pdf-frame">
+                            <b>{{ term }}</b>
+                        </a> → Page {{ page }}
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
-    </div>
     {% endif %}
+
+    {% if not_found %}
+        <div class="matches-block" style="background: #fde8ea; color: #d14545;">
+            <h3>❌ Terms Not Found</h3>
+            <ul class="matches-list">
+                {% for term in not_found %}
+                    <li class="match-item" style="background:#fde8ea; color:#d14545;">
+                        {{ term }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if filename %}
+        <div class="download-center">
+            <a href="{{ url_for('download_file', filename=filename) }}">⬇️ Download Highlighted PDF</a>
+        </div>
+    {% endif %}
+
+    <div class="share-links">
+        <!-- Whatsapp Share -->
+        <a href="https://wa.me/?text={{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share on WhatsApp">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" width="24" height="24" style="display: block;">
+        </a>
+
+        <!-- Email Share -->
+        <a href="mailto:?subject=Highlighted PDF&body=Check out this highlighted PDF: {{ view_url | urlencode }}" target="_blank" rel="noopener" title="Share via Email">
+            <img src="https://icons.iconarchive.com/icons/dtafalonso/win-10x/256/Email-icon.png" alt="Email" width="24" height="24" style="display: block;">
+        </a>
+    </div>
+
 </div>
 
 </body>
