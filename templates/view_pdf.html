@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>PDF Highlighter</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
     <style>
         body {
             font-family: 'Inter', Arial, sans-serif;
@@ -19,7 +19,7 @@
             flex: 3;
             background: #fff;
             border-radius: 20px;
-            box-shadow: 0 4px 18px rgba(60,80,170,0.07);
+            box-shadow: 0 4px 18px rgba(60, 80, 170, 0.07);
             padding: 0;
             margin: 20px 0 20px 20px;
             overflow: hidden;
@@ -40,7 +40,7 @@
             background: #fff;
             margin: 20px 20px 20px 0;
             border-radius: 20px;
-            box-shadow: 0 4px 16px rgba(60,80,170,0.06);
+            box-shadow: 0 4px 16px rgba(60, 80, 170, 0.06);
             padding: 28px 24px;
             overflow-y: auto;
             min-width: 320px;
@@ -51,7 +51,7 @@
         .matches-block {
             background: #f9fbff;
             border-radius: 16px;
-            box-shadow: 0 0 16px rgba(60,80,170,0.05);
+            box-shadow: 0 0 16px rgba(60, 80, 170, 0.05);
             padding: 20px 24px;
             display: flex;
             flex-direction: column;
@@ -71,7 +71,7 @@
             border-radius: 6px;
             padding: 8px 14px;
             margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(33,160,101,0.13);
+            box-shadow: 0 2px 8px rgba(33, 160, 101, 0.13);
         }
         .error {
             color: #d14545;
@@ -80,7 +80,7 @@
             border-radius: 6px;
             padding: 8px 14px;
             margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(209,69,69,0.10);
+            box-shadow: 0 2px 8px rgba(209, 69, 69, 0.10);
         }
         ul.matches-list {
             padding: 0;
@@ -95,7 +95,7 @@
             padding: 10px 10px 8px 10px;
             border-radius: 8px;
             background: linear-gradient(100deg, #f7f9fe 70%, #f2f5fa 100%);
-            box-shadow: 0 1px 8px rgba(120,130,180,0.06);
+            box-shadow: 0 1px 8px rgba(120, 130, 180, 0.06);
             display: flex;
             align-items: center;
             transition: box-shadow 0.28s, background 0.28s;
@@ -103,11 +103,10 @@
         }
         .match-item:hover {
             background: #dae7fc;
-            box-shadow: 0 2px 12px rgba(85,110,195,.14);
+            box-shadow: 0 2px 12px rgba(85, 110, 195, 0.14);
         }
         .match-item b {
-            background: #f6e054;
-            color: #6b623a;
+            color: #fff;
             border-radius: 4px;
             padding: 3px 8px;
             font-weight: 600;
@@ -127,7 +126,7 @@
             border-radius: 6px;
             padding: 7px 15px;
             font-size: 1em;
-            box-shadow: 0 1px 6px rgba(92,119,211,.09);
+            box-shadow: 0 1px 6px rgba(92, 119, 211, 0.09);
             transition: background 0.18s, color 0.18s;
             margin-right: 10px;
             display: inline-flex;
@@ -201,9 +200,14 @@
             <h3>📄 Matches Found</h3>
             <ul class="matches-list">
                 {% for term, page in matches %}
+                    {% set color = term_colors.get(term, (1,1,0)) %}
+                    {% set r = (color[0]*255)|int %}
+                    {% set g = (color[1]*255)|int %}
+                    {% set b = (color[2]*255)|int %}
+                    {% set hexcolor = '#%02x%02x%02x' | format(r, g, b) %}
                     <li class="match-item">
                         <a href="{{ view_url }}#page={{ page }}" target="pdf-frame">
-                            <b>{{ term }}</b>
+                            <b style="background-color: {{ hexcolor }};">{{ term }}</b>
                         </a> → Page {{ page }}
                     </li>
                 {% endfor %}
