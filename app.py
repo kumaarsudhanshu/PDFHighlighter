@@ -82,7 +82,6 @@ def index():
 
             for term in terms:
                 escaped_term = re.escape(term)
-                # Regex se text matching karenge
                 if term.isdigit():
                     pattern = re.compile(rf"(?<!\d){escaped_term}(?!\d|\.?\d)")
                 elif re.search(r'[^\w\s]', term):
@@ -96,13 +95,10 @@ def index():
                     matched_pages.append((term, page_num))
                     print(f"Term '{term}' found {len(matches_found)} times on page {page_num}")
 
-                    # Highlight original term
-                    highlight_rects = page.search_for(term, hit_max=64)
-                    # Highlight normalized term (spaces removed)
+                    highlight_rects = page.search_for(term)
                     normalized_term = normalize_text(term)
-                    highlight_rects += page.search_for(normalized_term, hit_max=64)
+                    highlight_rects += page.search_for(normalized_term)
 
-                    # Remove duplicates by converting to set (because page.search_for returns Rect objects, convert to tuples)
                     unique_rects = { (r.x0, r.y0, r.x1, r.y1) : r for r in highlight_rects }
                     
                     for rect in unique_rects.values():
