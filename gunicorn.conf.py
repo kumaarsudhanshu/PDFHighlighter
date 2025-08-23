@@ -1,1 +1,4 @@
-gunicorn app:app --bind 0.0.0.0:$PORT --workers 3 --timeout 600 --log-level error
+bind = "0.0.0.0:5050"
+workers = 3
+timeout = 600
+loglevel = "error"
