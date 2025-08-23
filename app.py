@@ -13,6 +13,17 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def normalize_text(text):
     return re.sub(r"\s+", "", text).lower()
 
+def map_normalized_to_original(page_text):
+    mapping = []
+    normalized_chars = []
+    for i, c in enumerate(page_text):
+        if c.isspace():
+            continue
+        normalized_chars.append(c.lower())
+        mapping.append(i)
+    normalized_text = ''.join(normalized_chars)
+    return normalized_text, mapping
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -59,53 +70,40 @@ def index():
 
         for page_num, page in enumerate(doc, start=1):
             print(f"\n--- Processing page {page_num} ---")
-            try:
-                blocks = page.get_text("dict")["blocks"]
-            except Exception as e:
-                print(f"⚠️ Error reading page {page_num}: {e}")
-                continue
 
-            page_text = ""
-            for block in blocks:
-                if "lines" in block and block["lines"]:
-                    for line in block["lines"]:
-                        for span in line["spans"]:
-                            page_text += span["text"] + "\n"
-
-            print(f"Page {page_num} extracted text length: {len(page_text)}")
-
+            page_text = page.get_text()
             if not page_text.strip():
                 print(f"Page {page_num} has no text, skipping page.")
                 continue
 
             no_text_flag = False
+            normalized_page_text, mapping = map_normalized_to_original(page_text)
 
             for term in terms:
-                escaped_term = re.escape(term)
-                if term.isdigit():
-                    pattern = re.compile(rf"(?<!\d){escaped_term}(?!\d|\.?\d)")
-                elif re.search(r'[^\w\s]', term):
-                    pattern = re.compile(escaped_term, re.IGNORECASE)
-                else:
-                    pattern = re.compile(rf"\b{escaped_term}\b", re.IGNORECASE)
+                normalized_term = normalize_text(term)
+                start = 0
 
-                matches_found = list(pattern.finditer(page_text))
-                if matches_found:
-                    match_count += len(matches_found)
-                    matched_pages.append((term, page_num))
-                    print(f"Term '{term}' found {len(matches_found)} times on page {page_num}")
+                while True:
+                    idx = normalized_page_text.find(normalized_term, start)
+                    if idx == -1:
+                        break
 
-                    highlight_rects = page.search_for(term)
-                    normalized_term = normalize_text(term)
-                    if normalized_term != term:
-                        highlight_rects += page.search_for(normalized_term)
+                    orig_start = mapping[idx]
+                    orig_end = mapping[idx + len(normalized_term) - 1] + 1
+                    matched_str = page_text[orig_start:orig_end]
 
-                    unique_rects = { (r.x0, r.y0, r.x1, r.y1) : r for r in highlight_rects }
-                    
-                    for rect in unique_rects.values():
+                    # Highlight matched text rectangles
+                    rects = page.search_for(matched_str)
+                    for rect in rects:
                         highlight = page.add_highlight_annot(rect)
                         highlight.set_colors(stroke=highlight_color)
                         highlight.update()
+
+                    matched_pages.append((term, page_num))
+                    match_count += 1
+                    print(f"Term '{term}' found on page {page_num}, text: '{matched_str}'")
+
+                    start = idx + 1
 
         try:
             doc.save(output_path)
