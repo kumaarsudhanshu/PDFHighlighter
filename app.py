@@ -51,37 +51,40 @@ def to_loose_regex(term: str) -> str:
     term_escaped = re.escape(term)
     term_escaped = term_escaped.replace(r'\-', r'[-\u2013\u2014]')
     term_escaped = re.sub(r'\\\s+', r'\\s*', term_escaped)
-    
+    # Always enforce word boundary for numeric/slash terms
     if is_numeric_term(term) or '/' in term or '\\' in term:
         term_escaped = r'(?<!\d)' + term_escaped + r'(?!\d)'
-    
     return term_escaped
 
 # -------------- Highlight Helper --------------
 
-def add_highlight_quads(page, rects, color=(1, 1, 0), opacity=0.35, pad=(-0.5, -0.8, 0.5, 0.8)):
-    """Safely add highlight annotations with rect validation."""
+def add_highlight_quads(page, rects, color=(1, 1, 0), opacity=1.0):
+    if not rects:
+        print("No rects to highlight!")
+        return False
+
     quads = []
+
     for r in rects:
-        if not r:
-            continue
         try:
-            rr = fitz.Rect(r) + pad  # ensure it's a Rect + padding
-            quads.append(fitz.Quad(rr))
+            rect = fitz.Rect(r)
+            if rect.get_area() > 0:
+                quads.append(fitz.Quad(rect))
+            else:
+                print(f"Invalid rectangle with zero area: {rect}")
         except Exception as e:
-            print("Skipping invalid rect:", r, e)
-            continue
+            print("Error creating rect:", e)
 
     if quads:
         try:
-            annot = page.add_highlight_annot(quads if len(quads) > 1 else quads[0])
-            annot.set_colors(stroke=color)
+            annot = page.add_highlight_annot(quads)
+            annot.set_colors(stroke=color, fill=color)
             annot.set_opacity(opacity)
             annot.update()
+            print(f"Highlighted {len(quads)} areas.")
             return True
         except Exception as e:
-            print("Highlight failed:", e)
-            return False
+            print("Failed to add annotation:", e)
     return False
 
 # -------------- Routes --------------
@@ -135,7 +138,10 @@ def index():
             page_words_norm_full = [normalize_text(w) for w in page_words_raw]
             page_words_norm_token = [normalize_token_keep_dash_space(w) for w in page_words_raw]
 
-            page_text_norm_full = normalize_text(page.get_text())
+            # Both normalized WITH SPACES and WITHOUT SPACES!
+            page_text_raw = page.get_text()
+            page_text_norm_nospace = normalize_text(page_text_raw)
+            page_text_norm_space = normalize_token_keep_dash_space(page_text_raw)
 
             for term, norm_term in zip(terms, terms_normalized):
                 found_in_page = False
@@ -175,15 +181,22 @@ def index():
                                     match_count += 1
                                 break
 
-                # 3) Regex fallback
-                if not found_in_page and (has_slash or not numeric_query):
+                # 3) Strict regex (fulltext) matching for numeric/slash terms ONLY!
+                if not found_in_page and (numeric_query or has_slash):
                     pattern = to_loose_regex(term)
                     try:
-                        if re.search(pattern, page_text_norm_full, re.IGNORECASE):
+                        if re.search(pattern, page_text_norm_space, re.IGNORECASE):
                             found_in_page = True
                             match_count += 1
                     except re.error:
                         pass
+                # 4) Text-only terms: safe substring matching (for human language, names etc)
+                elif not found_in_page:
+                    search_nospace = normalize_text(term)
+                    search_space = normalize_token_keep_dash_space(term)
+                    if search_nospace in page_text_norm_nospace or search_space in page_text_norm_space:
+                        found_in_page = True
+                        match_count += 1
 
                 if found_in_page:
                     not_found_terms.discard(term)
@@ -196,7 +209,6 @@ def index():
             return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
                                    view_url=None, message=f"❌ Error saving PDF: {e}", message_type="error")
 
-        # Cache-busting view URL
         view_url = url_for('view_file', filename=os.path.basename(output_path), _external=True) + f"?v={uuid.uuid4()}"
 
         if no_text_flag:
