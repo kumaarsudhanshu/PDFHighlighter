@@ -35,7 +35,6 @@ def normalize_token_keep_dash_space(text: str) -> str:
     return s
 
 def is_numeric_term(raw: str) -> bool:
-    # Check if it's a pure number or number with slashes (like 11090/2018)
     return re.fullmatch(r'\d+(?:[/\\]\d+)*', raw.strip()) is not None
 
 def split_term_tokens(raw_term: str):
@@ -53,24 +52,37 @@ def to_loose_regex(term: str) -> str:
     term_escaped = term_escaped.replace(r'\-', r'[-\u2013\u2014]')
     term_escaped = re.sub(r'\\\s+', r'\\s*', term_escaped)
     
-    # For numeric terms and terms with slashes, enforce exact boundaries
     if is_numeric_term(term) or '/' in term or '\\' in term:
-        # Use negative lookbehind and lookahead to prevent partial matches
         term_escaped = r'(?<!\d)' + term_escaped + r'(?!\d)'
     
     return term_escaped
 
+# -------------- Highlight Helper --------------
+
 def add_highlight_quads(page, rects, color=(1, 1, 0), opacity=0.35, pad=(-0.5, -0.8, 0.5, 0.8)):
+    """Safely add highlight annotations with rect validation."""
     quads = []
     for r in rects:
-        rr = r + pad  # small padding for visibility
-        quads.append(fitz.Quad(rr))
-    if len(quads) > 0:
-        annot = page.add_highlight_annot(quads if len(quads) > 1 else quads[0])
-        annot.set_colors(stroke=color)
-        annot.set_opacity(opacity)
-        annot.update()
-    return len(quads) > 0
+        if not r:
+            continue
+        try:
+            rr = fitz.Rect(r) + pad  # ensure it's a Rect + padding
+            quads.append(fitz.Quad(rr))
+        except Exception as e:
+            print("Skipping invalid rect:", r, e)
+            continue
+
+    if quads:
+        try:
+            annot = page.add_highlight_annot(quads if len(quads) > 1 else quads[0])
+            annot.set_colors(stroke=color)
+            annot.set_opacity(opacity)
+            annot.update()
+            return True
+        except Exception as e:
+            print("Highlight failed:", e)
+            return False
+    return False
 
 # -------------- Routes --------------
 
@@ -130,7 +142,7 @@ def index():
                 numeric_query = is_numeric_term(term)
                 has_slash = '/' in term or '\\' in term
 
-                # 1) Single-word equality after full normalization (common case)
+                # 1) Single-word equality
                 for i, wnorm in enumerate(page_words_norm_full):
                     if wnorm == norm_term:
                         if add_highlight_quads(page, [page_rects[i]], color=highlight_color):
@@ -138,7 +150,7 @@ def index():
                             match_count += 1
                         break
 
-                # 2) Phrase / multi-token scan with quad-based highlight
+                # 2) Phrase / multi-token scan
                 if not found_in_page:
                     term_tokens_raw = split_term_tokens(term)
                     term_tokens_norm = [normalize_text(tk) for tk in term_tokens_raw]
@@ -163,7 +175,7 @@ def index():
                                     match_count += 1
                                 break
 
-                # 3) Regex fallback - for terms with slashes or complex patterns
+                # 3) Regex fallback
                 if not found_in_page and (has_slash or not numeric_query):
                     pattern = to_loose_regex(term)
                     try:
@@ -171,7 +183,6 @@ def index():
                             found_in_page = True
                             match_count += 1
                     except re.error:
-                        # Handle invalid regex patterns
                         pass
 
                 if found_in_page:
