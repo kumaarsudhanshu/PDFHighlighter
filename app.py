@@ -5,7 +5,7 @@ import uuid
 import re
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Increased to 25 MB limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB limit
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_pdfs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -76,7 +76,6 @@ def index():
                 message_type="error")
 
         highlight_color = (1, 1, 0)  # Yellow
-        matched_terms = set()
         matches_with_pages = []
         not_found_terms = set(terms)
         no_text_flag = True
@@ -91,12 +90,7 @@ def index():
             normalized_page_text, mapping = map_normalized_to_original(page_text)
 
             for term in terms:
-                if term in matched_terms:
-                    continue
-
-                # Normalize and escape term for safe regex matching
                 normalized_term = normalize_text(term)
-                escaped_term = re.escape(normalized_term)
 
                 start_idx = 0
                 found_in_page = False
@@ -110,12 +104,9 @@ def index():
                     orig_end = mapping[idx + len(normalized_term) - 1] + 1
                     matched_str = page_text[orig_start:orig_end]
 
-                    # Boundary characters (left and right)
                     prev_char = page_text[orig_start - 1] if orig_start > 0 else " "
                     next_char = page_text[orig_end] if orig_end < len(page_text) else " "
 
-                    # Only highlight if boundaries are spaces/newlines/tabs or string ends,
-                    # excludes partial matches embedded in other words or numbers
                     if prev_char in [' ', '\n', '\r', '\t'] and next_char in [' ', '\n', '\r', '\t']:
                         rects = page.search_for(matched_str)
                         for rect in rects:
@@ -125,12 +116,10 @@ def index():
 
                         found_in_page = True
                         match_count += 1
-                        break  # Break after first found on page for this term
 
                     start_idx = idx + 1
 
                 if found_in_page:
-                    matched_terms.add(term)
                     not_found_terms.discard(term)
                     matches_with_pages.append((term, page_num))
 
@@ -198,4 +187,3 @@ def download_file(filename):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5050))
     app.run(host='0.0.0.0', port=port, debug=True)
-
