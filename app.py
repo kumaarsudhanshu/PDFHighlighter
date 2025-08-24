@@ -5,7 +5,7 @@ import uuid
 import re
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # Increased to 25 MB limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Increased to 25 MB limit
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_pdfs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
