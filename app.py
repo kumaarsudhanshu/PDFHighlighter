@@ -65,12 +65,12 @@ def index():
                                    message=f"❌ Failed to open PDF: {e}",
                                    message_type="error")
 
+        highlight_color = (1, 1, 0)  # Yellow
         matched_terms = set()
         matches_with_pages = []
         not_found_terms = set(terms)
         no_text_flag = True
         match_count = 0
-        highlight_color = (1, 1, 0)  # Yellow
 
         for page_num, page in enumerate(doc, start=1):
             page_text = page.get_text()
@@ -96,11 +96,11 @@ def index():
                     orig_start = mapping[idx]
                     orig_end = mapping[idx + len(normalized_term) - 1] + 1
 
-                    # Boundary check: term must not be part of larger word or number
                     prev_char = page_text[orig_start - 1] if orig_start > 0 else " "
                     next_char = page_text[orig_end] if orig_end < len(page_text) else " "
 
-                    if (not prev_char.isalnum()) and (not next_char.isalnum()):
+                    # Only allow boundaries that are whitespace or start/end of text
+                    if prev_char in [' ', '\n', '\r', '\t'] and next_char in [' ', '\n', '\r', '\t']:
                         matched_str = page_text[orig_start:orig_end]
 
                         rects = page.search_for(matched_str)
@@ -111,7 +111,7 @@ def index():
 
                         found_in_page = True
                         match_count += 1
-                        break  # match found, break inner while loop
+                        break
 
                     start_idx = idx + 1
 
