@@ -5,15 +5,13 @@ import uuid
 import re
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_pdfs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
 def normalize_text(text):
     return re.sub(r"\s+", "", text).lower()
-
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -22,26 +20,14 @@ def index():
         terms_raw = request.form.get('numbers', '')
 
         if not pdf_file or not terms_raw.strip():
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=[],
-                view_url=None,
-                message="⚠️ PDF file and search terms are required",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=[], view_url=None,
+                                   message="⚠️ PDF file and search terms are required", message_type="error")
 
-        # Parse and deduplicate search terms
         terms = list(set(filter(None, [t.strip() for t in terms_raw.split(',')])))
         if not terms:
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=[],
-                view_url=None,
-                message="⚠️ Please enter at least one valid number or text",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
+                                   view_url=None, message="⚠️ Please enter at least one valid number or text",
+                                   message_type="error")
 
         terms_normalized = [normalize_text(t) for t in terms]
 
@@ -53,14 +39,8 @@ def index():
         try:
             doc = fitz.open(input_path)
         except Exception as e:
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=[],
-                view_url=None,
-                message=f"❌ Failed to open PDF: {e}",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
+                                   view_url=None, message=f"❌ Failed to open PDF: {e}", message_type="error")
 
         highlight_color = (1, 1, 0)  # Yellow
         matches_with_pages = []
@@ -68,8 +48,7 @@ def index():
         no_text_flag = True
         match_count = 0
 
-        max_window_size = min(max(len(t.split('/')) for t in terms), 5)  # 5 is max window size cap
-
+        max_window_size = min(max(len(t.split('/')) for t in terms), 5)
 
         for page_num, page in enumerate(doc, start=1):
             words = page.get_text("words")
@@ -84,9 +63,7 @@ def index():
 
             for term, norm_term in zip(terms, terms_normalized):
                 found_in_page = False
-                window_size = norm_term.count('/') + 1  # approximate word count heuristic
-
-                # To handle approximate multi-word term matching, try sliding window of lengths near window_size
+                window_size = norm_term.count('/') + 1
                 min_window = max(1, window_size - 1)
                 max_window = window_size + 1
 
@@ -95,9 +72,8 @@ def index():
                         combined_words = ''.join(page_norm_words[i:i + win])
 
                         if combined_words == norm_term:
-                            # Highlight all words in window combined
                             combined_rect = page_word_rects[i]
-                            for j in range(i+1, i + win):
+                            for j in range(i + 1, i + win):
                                 combined_rect |= page_word_rects[j]
                             highlight = page.add_highlight_annot(combined_rect)
                             highlight.set_colors(stroke=highlight_color)
@@ -117,48 +93,28 @@ def index():
             doc.save(output_path)
             doc.close()
         except Exception as e:
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=[],
-                view_url=None,
-                message=f"❌ Error saving PDF: {e}",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
+                                   view_url=None, message=f"❌ Error saving PDF: {e}", message_type="error")
 
         view_url = url_for('view_file', filename=os.path.basename(output_path), _external=True)
 
         if no_text_flag:
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=[],
-                view_url=None,
-                message="⚠️ PDF me text available nahi hai. Agar scanned PDF hai to OCR enable karna padega.",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
+                                   view_url=None,
+                                   message="⚠️ PDF me text available nahi hai. Agar scanned PDF hai to OCR enable karna padega.",
+                                   message_type="error")
 
         if not matches_with_pages:
-            return render_template(
-                "view_pdf.html",
-                filename=None,
-                matches=[],
-                not_found=list(not_found_terms),
-                view_url=None,
-                message="⚠️ No exact matches found.",
-                message_type="error")
+            return render_template("view_pdf.html", filename=None, matches=[], not_found=list(not_found_terms),
+                                   view_url=None,
+                                   message="⚠️ No exact matches found.",
+                                   message_type="error")
 
         msg_text = f"✅ {match_count} total matches found!"
         msg_type = "success"
 
-        return render_template(
-            "view_pdf.html",
-            filename=os.path.basename(output_path),
-            matches=matches_with_pages,
-            not_found=sorted(not_found_terms),
-            view_url=view_url,
-            message=msg_text,
-            message_type=msg_type)
+        return render_template("view_pdf.html", filename=os.path.basename(output_path), matches=matches_with_pages,
+                               not_found=sorted(not_found_terms), view_url=view_url, message=msg_text, message_type=msg_type)
 
     return render_template("index.html", message=None, message_type=None)
 
@@ -174,5 +130,6 @@ def download_file(filename):
 
 
 if __name__ == '__main__':
+    import os
     port = int(os.environ.get("PORT", 5050))
     app.run(host='0.0.0.0', port=port, debug=True)
