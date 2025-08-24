@@ -39,7 +39,6 @@ def index():
                                    message="⚠️ PDF file and search terms are required",
                                    message_type="error")
 
-        # Get unique stripped terms
         terms = list(set(filter(None, [t.strip() for t in terms_raw.split(',')])))
         if not terms:
             return render_template("view_pdf.html",
@@ -57,7 +56,6 @@ def index():
 
         try:
             doc = fitz.open(input_path)
-            print(f"PDF loaded successfully: {input_filename}, pages: {doc.page_count}")
         except Exception as e:
             return render_template("view_pdf.html",
                                    filename=None,
@@ -67,12 +65,12 @@ def index():
                                    message=f"❌ Failed to open PDF: {e}",
                                    message_type="error")
 
-        highlight_color = (1, 1, 0)  # Yellow
         matched_terms = set()
         matches_with_pages = []
         not_found_terms = set(terms)
         no_text_flag = True
         match_count = 0
+        highlight_color = (1, 1, 0)  # Yellow
 
         for page_num, page in enumerate(doc, start=1):
             page_text = page.get_text()
@@ -97,17 +95,25 @@ def index():
 
                     orig_start = mapping[idx]
                     orig_end = mapping[idx + len(normalized_term) - 1] + 1
-                    matched_str = page_text[orig_start:orig_end]
 
-                    rects = page.search_for(matched_str)
-                    for rect in rects:
-                        highlight = page.add_highlight_annot(rect)
-                        highlight.set_colors(stroke=highlight_color)
-                        highlight.update()
+                    # Boundary check: term must not be part of larger word or number
+                    prev_char = page_text[orig_start - 1] if orig_start > 0 else " "
+                    next_char = page_text[orig_end] if orig_end < len(page_text) else " "
+
+                    if (not prev_char.isalnum()) and (not next_char.isalnum()):
+                        matched_str = page_text[orig_start:orig_end]
+
+                        rects = page.search_for(matched_str)
+                        for rect in rects:
+                            highlight = page.add_highlight_annot(rect)
+                            highlight.set_colors(stroke=highlight_color)
+                            highlight.update()
+
+                        found_in_page = True
+                        match_count += 1
+                        break  # match found, break inner while loop
 
                     start_idx = idx + 1
-                    found_in_page = True
-                    match_count += 1
 
                 if found_in_page:
                     matched_terms.add(term)
@@ -117,7 +123,6 @@ def index():
         try:
             doc.save(output_path)
             doc.close()
-            print(f"PDF saved with highlights: {output_path}")
         except Exception as e:
             return render_template("view_pdf.html",
                                    filename=None,
