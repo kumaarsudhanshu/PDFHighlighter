@@ -68,7 +68,8 @@ def index():
         no_text_flag = True
         match_count = 0
 
-        max_window_size = max(len(t) for t in terms_normalized)  # max length of term in chars (approx)
+        max_window_size = min(max(len(t.split('/')) for t in terms), 5)  # 5 is max window size cap
+
 
         for page_num, page in enumerate(doc, start=1):
             words = page.get_text("words")
