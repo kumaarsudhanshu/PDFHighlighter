@@ -43,6 +43,8 @@ def index():
                 message="⚠️ Please enter at least one valid number or text",
                 message_type="error")
 
+        terms_normalized = [normalize_text(t) for t in terms]
+
         input_filename = f"{uuid.uuid4()}.pdf"
         input_path = os.path.join(UPLOAD_FOLDER, input_filename)
         output_path = input_path.replace(".pdf", "_highlighted.pdf")
@@ -66,27 +68,45 @@ def index():
         no_text_flag = True
         match_count = 0
 
+        max_window_size = max(len(t) for t in terms_normalized)  # max length of term in chars (approx)
+
         for page_num, page in enumerate(doc, start=1):
-            words = page.get_text("words")  # List of tuples with bounding box and word text
+            words = page.get_text("words")
             if not words:
                 continue
 
             no_text_flag = False
 
-            # Normalize words with their rects for easy comparison
-            normalized_words = [(fitz.Rect(w[:4]), normalize_text(w[4])) for w in words]
+            page_words = [w[4] for w in words]
+            page_norm_words = [normalize_text(w) for w in page_words]
+            page_word_rects = [fitz.Rect(w[:4]) for w in words]
 
-            for term in terms:
-                normalized_term = normalize_text(term)
+            for term, norm_term in zip(terms, terms_normalized):
                 found_in_page = False
+                window_size = norm_term.count('/') + 1  # approximate word count heuristic
 
-                for rect, word_norm in normalized_words:
-                    if word_norm == normalized_term:
-                        highlight = page.add_highlight_annot(rect)
-                        highlight.set_colors(stroke=highlight_color)
-                        highlight.update()
-                        found_in_page = True
-                        match_count += 1
+                # To handle approximate multi-word term matching, try sliding window of lengths near window_size
+                min_window = max(1, window_size - 1)
+                max_window = window_size + 1
+
+                for win in range(min_window, max_window + 1):
+                    for i in range(len(page_words) - win + 1):
+                        combined_words = ''.join(page_norm_words[i:i + win])
+
+                        if combined_words == norm_term:
+                            # Highlight all words in window combined
+                            combined_rect = page_word_rects[i]
+                            for j in range(i+1, i + win):
+                                combined_rect |= page_word_rects[j]
+                            highlight = page.add_highlight_annot(combined_rect)
+                            highlight.set_colors(stroke=highlight_color)
+                            highlight.update()
+
+                            found_in_page = True
+                            match_count += 1
+
+                    if found_in_page:
+                        break
 
                 if found_in_page:
                     not_found_terms.discard(term)
