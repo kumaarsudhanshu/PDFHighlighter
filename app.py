@@ -12,21 +12,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 def normalize_text(text):
-    # Remove all whitespace and lowercase for normalization
     return re.sub(r"\s+", "", text).lower()
-
-
-def map_normalized_to_original(page_text):
-    # Build mapping from normalized text index to original text index (ignoring spaces)
-    mapping = []
-    normalized_chars = []
-    for i, c in enumerate(page_text):
-        if c.isspace():
-            continue
-        normalized_chars.append(c.lower())
-        mapping.append(i)
-    normalized_text = ''.join(normalized_chars)
-    return normalized_text, mapping
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -64,7 +50,6 @@ def index():
 
         try:
             doc = fitz.open(input_path)
-            print(f"PDF loaded successfully: {input_filename}, pages: {doc.page_count}")
         except Exception as e:
             return render_template(
                 "view_pdf.html",
@@ -82,42 +67,26 @@ def index():
         match_count = 0
 
         for page_num, page in enumerate(doc, start=1):
-            page_text = page.get_text()
-            if not page_text.strip():
+            words = page.get_text("words")  # List of tuples with bounding box and word text
+            if not words:
                 continue
 
             no_text_flag = False
-            normalized_page_text, mapping = map_normalized_to_original(page_text)
+
+            # Normalize words with their rects for easy comparison
+            normalized_words = [(fitz.Rect(w[:4]), normalize_text(w[4])) for w in words]
 
             for term in terms:
                 normalized_term = normalize_text(term)
-
-                start_idx = 0
                 found_in_page = False
 
-                while True:
-                    idx = normalized_page_text.find(normalized_term, start_idx)
-                    if idx == -1:
-                        break
-
-                    orig_start = mapping[idx]
-                    orig_end = mapping[idx + len(normalized_term) - 1] + 1
-                    matched_str = page_text[orig_start:orig_end]
-
-                    prev_char = page_text[orig_start - 1] if orig_start > 0 else " "
-                    next_char = page_text[orig_end] if orig_end < len(page_text) else " "
-
-                    if prev_char in [' ', '\n', '\r', '\t'] and next_char in [' ', '\n', '\r', '\t']:
-                        rects = page.search_for(matched_str)
-                        for rect in rects:
-                            highlight = page.add_highlight_annot(rect)
-                            highlight.set_colors(stroke=highlight_color)
-                            highlight.update()
-
+                for rect, word_norm in normalized_words:
+                    if word_norm == normalized_term:
+                        highlight = page.add_highlight_annot(rect)
+                        highlight.set_colors(stroke=highlight_color)
+                        highlight.update()
                         found_in_page = True
                         match_count += 1
-
-                    start_idx = idx + 1
 
                 if found_in_page:
                     not_found_terms.discard(term)
@@ -126,7 +95,6 @@ def index():
         try:
             doc.save(output_path)
             doc.close()
-            print(f"PDF saved with highlights: {output_path}")
         except Exception as e:
             return render_template(
                 "view_pdf.html",
