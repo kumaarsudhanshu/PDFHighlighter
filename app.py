@@ -11,7 +11,7 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_pdfs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# -------------- Normalization & Helpers --------------
+# -------------- Normalization & Helpers (UPDATED) --------------
 
 def normalize_text(text: str) -> str:
     s = unicodedata.normalize('NFKD', text)
@@ -35,7 +35,8 @@ def normalize_token_keep_dash_space(text: str) -> str:
     return s
 
 def is_numeric_term(raw: str) -> bool:
-    return re.fullmatch(r'\d+(?:[/\\]\d+)*', raw.strip()) is not None
+    # Updated: Only pure numbers or number patterns without decimals
+    return re.fullmatch(r'\d+(?:[/\\-]\d+)*', raw.strip()) is not None and '.' not in raw
 
 def split_term_tokens(raw_term: str):
     t = normalize_token_keep_dash_space(raw_term)
@@ -50,44 +51,54 @@ def split_term_tokens(raw_term: str):
 def to_loose_regex(term: str) -> str:
     term_escaped = re.escape(term)
     term_escaped = term_escaped.replace(r'\-', r'[-\u2013\u2014]')
+    
+    # FLEXIBLE SPACE HANDLING - allow optional spaces around special chars
     term_escaped = re.sub(r'\\\s+', r'\\s*', term_escaped)
-    # Always enforce word boundary for numeric/slash terms
+    
+    # Add flexible spaces around dashes and slashes
+    term_escaped = re.sub(r'([-\u2013\u2014])', r'\\s*\\1\\s*', term_escaped)
+    term_escaped = re.sub(r'([/\\])', r'\\s*\\1\\s*', term_escaped)
+    
+    # Clean up multiple \s* patterns
+    term_escaped = re.sub(r'(\\s\*){2,}', r'\\s*', term_escaped)
+    
+    # STRICT boundaries for numeric/slash terms to avoid partial matches like 71 in 71.4 or 24 in 2410
     if is_numeric_term(term) or '/' in term or '\\' in term:
-        term_escaped = r'(?<!\d)' + term_escaped + r'(?!\d)'
+        term_escaped = r'(?<![\d/\\])' + term_escaped + r'(?![\d/\\.])'  # No digits, slashes, or dots before/after
+    elif '-' in term:  # For dash terms like 2022-2026
+        term_escaped = r'(?<!\w)' + term_escaped + r'(?!\w)'
+    
     return term_escaped
 
-# -------------- Highlight Helper --------------
+# -------------- Highlight Helper (ORIGINAL) --------------
 
 def add_highlight_quads(page, rects, color=(1, 1, 0), opacity=1.0):
     if not rects:
         print("No rects to highlight!")
         return False
 
-    quads = []
-
-    for r in rects:
+    try:
+        annot = page.add_highlight_annot(rects)
+        annot.set_colors(stroke=color, fill=color) 
+        annot.set_opacity(opacity)
+        annot.update()
+        print(f"Highlighted {len(rects)} areas.")
+        return True
+    except Exception as e:
+        print(f"Failed to add annotation: {e}")
         try:
-            rect = fitz.Rect(r)
-            if rect.get_area() > 0:
-                quads.append(fitz.Quad(rect))
-            else:
-                print(f"Invalid rectangle with zero area: {rect}")
-        except Exception as e:
-            print("Error creating rect:", e)
-
-    if quads:
-        try:
-            annot = page.add_highlight_annot(quads)
-            annot.set_colors(stroke=color, fill=color)
-            annot.set_opacity(opacity)
-            annot.update()
-            print(f"Highlighted {len(quads)} areas.")
+            for rect in rects:
+                annot = page.add_highlight_annot(rect)
+                annot.set_colors(stroke=color, fill=color)
+                annot.set_opacity(opacity) 
+                annot.update()
+            print(f"Highlighted {len(rects)} areas individually.")
             return True
-        except Exception as e:
-            print("Failed to add annotation:", e)
-    return False
+        except Exception as e2:
+            print(f"Individual highlighting also failed: {e2}")
+            return False
 
-# -------------- Routes --------------
+# -------------- Routes (UPDATED LOGIC) --------------
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -145,18 +156,21 @@ def index():
 
             for term, norm_term in zip(terms, terms_normalized):
                 found_in_page = False
+                highlighted = False  # New flag to track if highlighted
                 numeric_query = is_numeric_term(term)
                 has_slash = '/' in term or '\\' in term
+                has_dash = '-' in term
 
-                # 1) Single-word equality
+                # 1) Single-word exact equality (strict for numbers)
                 for i, wnorm in enumerate(page_words_norm_full):
                     if wnorm == norm_term:
                         if add_highlight_quads(page, [page_rects[i]], color=highlight_color):
+                            highlighted = True
                             found_in_page = True
                             match_count += 1
                         break
 
-                # 2) Phrase / multi-token scan
+                # 2) Phrase / multi-token scan (exact tokens)
                 if not found_in_page:
                     term_tokens_raw = split_term_tokens(term)
                     term_tokens_norm = [normalize_text(tk) for tk in term_tokens_raw]
@@ -166,7 +180,7 @@ def index():
                         page_tokens = []
                         page_token_rects = []
                         for w_str, w_rect in zip(page_words_norm_token, page_rects):
-                            segs = re.split(r'(-)', w_str)
+                            segs = re.split(r'(-)', w_str)  # keep '-' as its own token
                             for seg in segs:
                                 if seg == '' or seg == ' ':
                                     continue
@@ -177,28 +191,53 @@ def index():
                             if page_tokens[i:i + win] == term_tokens_norm:
                                 rects_span = [page_token_rects[j] for j in range(i, i + win)]
                                 if add_highlight_quads(page, rects_span, color=highlight_color):
+                                    highlighted = True
                                     found_in_page = True
                                     match_count += 1
                                 break
 
-                # 3) Strict regex (fulltext) matching for numeric/slash terms ONLY!
-                if not found_in_page and (numeric_query or has_slash):
+                # 3) Flexible regex matching ONLY if not found yet, and STRICT for detection (UPDATED)
+                if not found_in_page and (numeric_query or has_slash or has_dash):
                     pattern = to_loose_regex(term)
                     try:
-                        if re.search(pattern, page_text_norm_space, re.IGNORECASE):
-                            found_in_page = True
-                            match_count += 1
-                    except re.error:
+                        # Search in raw and normalized text, but only mark found if match and we can highlight
+                        matches = list(re.finditer(pattern, page_text_raw, re.IGNORECASE)) + list(re.finditer(pattern, page_text_norm_space, re.IGNORECASE))
+                        if matches:
+                            # Attempt to highlight the first match (but since we want exact, we skip if not highlightable)
+                            # Note: For detection, we now require highlighting success for "found"
+                            # But since highlighting is separate, we assume if regex matches exactly, it's found only if highlighted
+                            # UPDATED: We don't highlight here; we only detect. But to avoid false positives, we check if it's exact
+                            for match in matches:
+                                # Extract matched text and check if it exactly matches normalized term (ignoring spaces)
+                                matched_text = match.group(0)
+                                matched_norm = normalize_text(matched_text)
+                                if matched_norm == norm_term:  # Strict: no extras like .4
+                                    # Now, to highlight, we need rects - but since regex doesn't give rects, we skip highlighting but mark found
+                                    # Wait, problem: we need to highlight. So for regex, we use search_instances to get rects
+                                    inst = page.search_for(matched_text)
+                                    if inst and add_highlight_quads(page, inst, color=highlight_color):
+                                        highlighted = True
+                                        found_in_page = True
+                                        match_count += 1
+                                        break
+                    except re.error as e:
+                        print(f"Regex error for term '{term}': {e}")
                         pass
-                # 4) Text-only terms: safe substring matching (for human language, names etc)
-                elif not found_in_page:
+                        
+                # 4) Text-only terms: safe substring matching (but strict for numerics - SKIP for numerics)
+                if not found_in_page and not (numeric_query or has_slash or has_dash):
                     search_nospace = normalize_text(term)
                     search_space = normalize_token_keep_dash_space(term)
                     if search_nospace in page_text_norm_nospace or search_space in page_text_norm_space:
-                        found_in_page = True
-                        match_count += 1
+                        # For non-numeric, we still detect, but attempt highlight with search_for
+                        inst = page.search_for(term)
+                        if inst and add_highlight_quads(page, inst, color=highlight_color):
+                            highlighted = True
+                            found_in_page = True
+                            match_count += 1
 
-                if found_in_page:
+                # Only if highlighted or exactly found, remove from not_found
+                if highlighted or found_in_page:
                     not_found_terms.discard(term)
                     matches_with_pages.append((term, page_num))
 
