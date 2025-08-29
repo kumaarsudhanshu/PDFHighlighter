@@ -67,7 +67,8 @@ def add_highlight_quads(page, rects, color=(1, 1, 0), opacity=1.0):
 
     for r in rects:
         try:
-            rect = fitz.Rect(r)
+            # अगर r पहले से fitz.Rect है तो उसे यूज़ करें, वरना नया बनाएं
+            rect = r if isinstance(r, fitz.Rect) else fitz.Rect(r)
             if rect.get_area() > 0:
                 quads.append(fitz.Quad(rect))
             else:
@@ -119,7 +120,6 @@ def index():
             return render_template("view_pdf.html", filename=None, matches=[], not_found=[],
                                    view_url=None, message=f"❌ Failed to open PDF: {e}", message_type="error")
 
-        highlight_color = (1, 1, 0)
         matches_with_pages = []
         not_found_terms = set(terms)
         no_text_flag = True
@@ -151,9 +151,8 @@ def index():
                 # 1) Single-word equality
                 for i, wnorm in enumerate(page_words_norm_full):
                     if wnorm == norm_term:
-                        if add_highlight_quads(page, [page_rects[i]], color=highlight_color):
-                            found_in_page = True
-                            match_count += 1
+                        found_in_page = True
+                        match_count += 1
                         break
 
                 # 2) Phrase / multi-token scan
@@ -175,10 +174,8 @@ def index():
 
                         for i in range(0, len(page_tokens) - win + 1):
                             if page_tokens[i:i + win] == term_tokens_norm:
-                                rects_span = [page_token_rects[j] for j in range(i, i + win)]
-                                if add_highlight_quads(page, rects_span, color=highlight_color):
-                                    found_in_page = True
-                                    match_count += 1
+                                found_in_page = True
+                                match_count += 1
                                 break
 
                 # 3) Strict regex (fulltext) matching for numeric/slash terms ONLY!
